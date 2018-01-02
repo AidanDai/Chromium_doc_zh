@@ -1,31 +1,32 @@
 # 多进程架构
-这个文档描述了Chromium的高层架构
+
+这个文档描述了 Chromium 的高层架构
 
 ## 问题
 
 构建一个从不会挂起或崩溃的渲染引擎几乎是不可能的。构建一个完全安全的渲染引擎也是几乎不可能的。
 
-在某种程度上，web浏览器当前状态就像一个与过去的多任务操作系统合作的单独的用户。正如在一个这样的操作系统中的错误程序会让整个系统挂掉，所以一个错误的web页面也可以让一个现代浏览器挂掉。仅仅需要一个浏览器或插件的bug，就饿能让整个浏览器和所有正在运行的标签页停止运行。
+在某种程度上，web浏览器当前状态就像一个与过去的多任务操作系统合作的单独的用户。正如在一个这样的操作系统中的错误程序会让整个系统挂掉，所以一个错误的web页面也可以让一个现代浏览器挂掉。仅仅需要一个浏览器或插件的 bug，就饿能让整个浏览器和所有正在运行的标签页停止运行。
 
-现代操作系统更加鲁棒，因为他们把应用程序分成了彼此隔离的独立线程。一个程序中的crash通常不会影响其他程序或整个操作系统，每个用户对用户数据的访问也是有限制的。
+现代操作系统更加健壮，因为他们把应用程序分成了彼此隔离的独立进程。一个程序中的 crash 通常不会影响其他程序或整个操作系统，每个用户对用户数据的访问也是有限制的。
 
 ## 架构概览
 
-我们为浏览器的标签页使用独立的进程，以此保护整个应用程序免受渲染引擎中的bug和故障的伤害。我们也会限制每个渲染引擎进程的相互访问，以及他们与系统其他部分的访问。某些程度上，这为web浏览提供了内存保护，为操作系统提供了访问控制。
+我们为浏览器的标签页使用独立的进程，以此保护整个应用程序免受渲染引擎中的 bug 和故障的伤害。我们也会限制每个渲染引擎进程的相互访问，以及他们与系统其他部分的访问。某些程度上，这为web浏览提供了内存保护，为操作系统提供了访问控制。
 
-我们把运行UI 和管理 Tab/Plugin 的主进程称为“浏览器进程”或“浏览器（Browser）”。相似的，标签页相关的进程被称作“渲染线程”或“渲染器（renderer）”。渲染器使用[WebKit](http://webkit.org/)开源引擎来实现中断与html的布局。
+我们把运行UI 和管理 Tab/Plugin 的主进程称为 "browser process" 或 "browser"。同样地，标签页相关的进程被称作 "render processes" 或 "renderers"。renderers 使用开源渲染引擎的 [Blink](https://www.chromium.org/blink) 来解释和渲染 HTML 的布局。
 
 ![img](../arch.png)
 
 ### 管理渲染进程
 
-每个渲染进程有一个全局的RenderProcess对象，管理它与父浏览器进程之间的通信，维护全局的状态。浏览器为每个渲染进程维护一个对应的RenderViewHost，用来管理浏览器状态，并与渲染器交流。浏览器与渲染器使用[Chromium's IPC system](../General_Architecture/Inter-process_Communication.md)进行交流。
+每个 render process 有一个全局的 `RenderProcess` 对象，用来管理与 parent browser process 之间的通信和维护全局的状态。browser 为每个 render process 维护一个对应的 `RenderProcessHost`，用来管理 browser 状态，并与 renderer 通信。The browser and the renderers 使用[Chromium's IPC system](../General_Architecture/Inter-process_Communication.md)进行通信。
 
-### 管理view
+### 管理 view
 
-每个渲染进程有一个以上的RenderView对象，由RenderProcess管理（它与标签页的内容相关）。对应的RenderProcessHost维护一个与渲染器中每个view相关的RenderViewHost。每个view被赋予一个view ID,以区分同一个渲染器中的不同view。这些ID在每个渲染器内是唯一的，但在浏览器中不是，所以区分一个view需要一个RenderProcessHost和一个view ID。
+每个 render process 有一个以上的 `RenderView` 对象，由 `RenderProcess` 管理（它与标签页的内容相关）。对应的 `RenderProcessHost` 维护一个与 renderer 中每个 view 相关的 `RenderViewHost`。每个 view 被赋予一个 view ID,以区分同一个 renderer 中的不同 view。这些 ID 在每个 renderer 内是唯一的，但在 browser 中不是，所以区分一个 view 需要一个 `RenderProcessHost` 和一个 view ID。
 
-浏览器与一个包含内容的特定标签页之间的交流是通过这些RenderViewHost对象来完成的，它们知道如何通过他们的RenderProcessHost向RenderProcess和RenderView送消息。
+browser 与一个包含内容的特定标签页之间的通信是通过这些 `RenderViewHost` 对象来完成的，`RenderViewHost` 知道如何通过它们的`RenderProcessHost` 向 `RenderProcess` 和 `RenderView` 发送消息。
 
 ## 组件与接口
 
