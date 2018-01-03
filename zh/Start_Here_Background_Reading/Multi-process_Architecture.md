@@ -54,54 +54,58 @@ browser 与一个包含内容的特定标签页之间的通信是通过这些 `R
 
 ## 检测 crashed 或者异常的 renderers
 
-browser process 的 的每个 `IPC` 连接会监听进程句柄。如果这些句柄是 signaled（有信号的），那么 render process 已经挂了，标签页会得到一个通知。从这时开始，我们会展示一个 "sad tab" 画面来通知用户 renderer 已经挂掉了。这个页面可以按刷新按钮或者通过打开一个新的导航来重新加载。这时，我们会注意到没有对应的进程，然后创建一个新的。
+browser process 的每个 `IPC` 连接会监听进程句柄。如果这些句柄是 signaled（有信号的），那么 render process 已经挂了，标签页会得到一个通知。从这时开始，我们会展示一个 "sad tab" 画面来通知用户 renderer 已经挂掉了。这个页面可以按刷新按钮或者通过打开一个新的导航来重新加载。这时，我们会注意到没有对应的进程，然后创建一个新的。
 
 ## renderer 中的沙箱
 
-给定的WebKit是运行在独立的进程中的，所以我们有机会限制它对系统资源的访问。例如，我们可以确保渲染器唯一的网络权限是通过它的父浏览器进程实现。相似的，我们可以限制它对文件系统的访问权限来使用host操作系统内置的权限。
+给定的 renderer 是运行在独立的进程中的，所以我们有机会通过沙箱（[sandboxing](https://www.chromium.org/developers/design-documents/sandbox)）限制它对系统资源的访问。例如，我们可以确保 renderer 唯一的网络权限是通过它的 parent browser process 实现。相似的，我们可以通过使用 host 操作系统内置的权限来限制它对文件系统的访问权限。
 
-除了限制渲染器对文件系统和网络的访问权限，我们也可以限制它对用户的显示器以及相关的东西的一些权限。我们在独立的windows桌面（对用户不可见）中运行每个进程。这避免了让渲染器在新的标签页或捕捉按键之间妥协。
+除了限制 renderer 对文件系统和网络的访问权限，我们也可以限制它对用户的显示器以及相关的东西的一些权限。我们在独立的 Windows "[Desktop](https://msdn.microsoft.com/en-us/library/windows/desktop/ms682573(v=vs.85).aspx)"（对用户不可见）中运行每个 render process。这避免了让 renderer 在新的标签页或捕捉按键之间妥协。
 
 ## 归还内存
 
-让渲染器运行在独立的进程中，赋予隐藏的标签页更低的优先级会更加直接。通常，Windows平台上的最小化的进程会把它们的内存自动放到一个“可用内存”池里。在低内存的情况下，Windows会在交换这部分内存到更高优先级内存前，把它们交换到磁盘，以保证用户可见的程序更易响应。我们可以对隐藏的标签页使用相同的策略。当渲染器进程没有顶层标签页时，我们可以释放进程的“工作集”空间，作为一个给系统的信号，让它如果必要的话，优先把这些内存交换到磁盘。因为我们发现，当用户在两个标签页间切换时，减少工作集大小也会减少标签页切换性能，所以我们是逐渐释放这部分内存的。这意味着如果用户切换回最近使用的标签页，这个标签页的内存比最近较少访问的标签页更可能被换入。有着足够内存的用户运行他们所有的程序时根本不会注意到这个进程：事实上Windows只会在需要的时候重新声明这块数据，所以在有充分内存时，不会有性能瓶颈。
+让 renderers 运行在独立的进程中，赋予隐藏的标签页更低的优先级会更加直接。通常，Windows 平台上的最小化的进程会把它们的内存自动放到一个“可用内存”池里。在低内存的情况下，Windows 会在交换这部分内存到更高优先级内存前，把它们交换到磁盘，以保证用户可见的程序更易响应。我们可以对隐藏的标签页使用相同的策略。当 render process 没有顶层标签页时，我们可以释放进程的“工作集”空间，作为一个给系统的信号，让它如果必要的话，优先把这些内存交换到磁盘。因为我们发现，当用户在两个标签页间切换时，减少工作集大小也会减少标签页切换性能，所以我们是逐渐释放这部分内存的。这意味着如果用户切换回最近使用的标签页，这个标签页的内存比最近较少访问的标签页更可能被换入。有着足够内存的用户运行他们所有的程序时根本不会注意到这个进程：事实上 Windows 只会在需要的时候重新声明这块数据，所以在有充分内存时，不会有性能瓶颈。
 
-这能帮助我们在低内存的情况下得到最佳的内存轨迹。几乎不被使用的后台标签页相关的内存可以被完全交换掉，前台标签页的数据可以被完全加载进内存。相反的，一个单进程浏览器会在它的内存里随机分配所有标签页的数据，并且不可能如此清晰地隔离已使用的和未使用的数据，导致了内存和性能上的浪费。
+这能帮助我们在低内存的情况下得到最佳的内存轨迹。几乎不被使用的后台标签页相关的内存可以被完全交换掉，前台标签页的数据可以被完全加载进内存。相反的，一个 single-process browser 会在它的内存里随机分配所有标签页的数据，并且不可能如此清晰地隔离已使用的和未使用的数据，导致了内存和性能上的浪费。
 
-## 插件
+## 插件和扩展
 
-Firefox风格的NPAPI插件运行在他们自己的进程里，与渲染器隔离。这会在[Plugin Architecture](../General_Architecture/Plugin_Architecture.md)中描述。
+Firefox 风格的 NPAPI 插件运行在他们自己的进程里，与 renderers 隔离。这会在[Plugin Architecture](../General_Architecture/Plugin_Architecture.md)中描述。
 
-## 如何添加新特性(不用扩充RenderView/RenderViewHost/WebContents)
+[Site Isolation](https://www.chromium.org/developers/design-documents/site-isolation) 项目的旨在提供更多的 renderers 之间的隔离，该项目的早期交付包括在隔离的进程中运行 Chrome 的 HTML / JavaScript 内容扩展。
+
+## 如何添加新特性(不用扩充 RenderView / RenderViewHost / WebContents)
+
 ### 问题
 
-过去，新的特性（比如，自动填充选取样例）可以通过把新特性的代码导入到RenderView类（在渲染器进程里）和RenderViewHost类（在浏览器进程里）。如果一个新的特性是在浏览器进程的IO线程里处理的，那么它的IPC信息由BrowserMessageFilter调度。RenderViewHost会只为了调用WebContent对象进程调用IPC信息，这会调用另一块代码。所有的浏览器与渲染器之间的IPC信息会被声明在一个巨大的render_messages_internal.h里，为每个新特性修改所有的这些文件意味着这些类会变得臃肿。
+过去，新的特性（比如，自动填充选取样例）可以通过把新特性的代码导入到 `RenderView` 类（在 renderer process 里）和 RenderViewHost 类（在 browser process 里）。如果一个新的特性是在 browser process 的 IO 线程里处理的，那么它的 `IPC` 消息由 `BrowserMessageFilter` 调度。`RenderViewHost` 仅仅会通过调用 `WebContent`（通过 `RenderViewHostDelegate` 接口） 分发 `IPC` 消息，这会调用另一块代码。所有的 browser 与 renderer 之间的 `IPC` 消息会被声明在一个巨大的 `render_messages_internal.h` 里，为每个新特性修改所有的这些文件意味着这些类会变得臃肿。
 
 
 ### 解决方案
 
-我们增加了helper类和对上面的每个线程IPC信息的过滤的机制。这使得编写自洽的特性更加容易。
+我们增加了 `helper` 类和对上面的每个线程 `IPC` 消息的过滤的机制。这使得编写自包含的特性更加容易。
 
-#### 渲染器端
+#### Renderer 端
 
-如果你想要过滤和发送IPC信息，实现RenderViewObserver接口(content/renderer/render_view_observer.h)。RenderViewObserver基类持有一个RenderView类，管理对象的生命周期，使其绑定到RenderView（它是可重写的）。这个类就可以过滤和发送IPC消息，此外还可以获得许多特性需要的关于页面加载与关闭的通知。作为一个例子，可以查看ChromeExtensionHelper (chrome/renderer/extensions/chrome_extension_helper.h)。
+如果你想要过滤和发送 `IPC` 消息，就需要实现 `RenderViewObserver` 接口( `content/public/renderer/render_view_observer.h` )。`RenderViewObserver` 基类持有一个 `RenderView` 类，管理对象的生命周期，使其绑定到 `RenderView`（它是可重写的）。这个类就可以过滤和发送 `IPC` 消息，此外还可以获得许多特性需要的关于页面加载与关闭的通知。作为一个例子，可以查看 `ExtensionHelper` ( `extensions/extension_helper.h` )。
 
-如果你的特性有一部分代码是在WebKit内的，避免通过WebViewClient接口回调，这样我们就不会使得WebViewClient变得庞大。考虑创建新的WebKit接口给WebKit代码调用，让渲染器端的类去实现它。作为一个例子，查看WebAutoFillClient (WebKit/chromium/public/WebAutoFillClient.h).
+如果你的特性有一部分代码是在 `WebKit` 内的，避免通过 `WebViewClient` 接口回调，这样我们就不会使得 `WebViewClient` 变得庞大。考虑创建新的 `WebKit` 接口给 `WebKit` 代码调用，让 renderer 端的类去实现它。作为一个例子，查看 `WebAutoFillClient` (`third_party/WebKit/public/WebAutoFillClient.h`)。
 
-### 浏览器UI线程
+### Browser UI thread
 
-WebContentsObserver (content/public/browser/web_contents_observer.h)接口允许UI线程的对象过滤IPC信息，以及给出关于页面导航的通知。作为一个例子：查看TabHelper (chrome/browser/extensions/tab_helper.h)。
+`WebContentsObserver` ( `content/public/browser/web_contents_observer.h` ) 接口允许 UI 线程的对象过滤 `IPC` 消息，以及给出关于页面导航的通知。作为一个例子：请看 `TabHelper` (`chrome/browser/extensions/tab_helper.h`)。
 
-### 浏览器其他线程
+### 其他的 browser threads
 
-为了过滤和发送IPC信息给其他的浏览器线程，比如IO/FILE/WEBKIT等等，实现BrowserMessageFilter接口(content/browser/browser_message_filter.h)。BrowserRenderProcessHost对象在它的CreateMessageFilters函数里创造和增加过滤器。
+为了过滤和发送 `IPC` 消息给其他的 browser threads，比如 IO / FILE 等等，实现 `BrowserMessageFilter` 接口(`content/public/browser/browser_message_filter.h`)。`RenderProcessHostImpl` 对象在它的 `CreateMessageFilters` 函数里创造和增加过滤器。
 
-通常，如果一个特性有许多IPC消息，这些消息应该移动到一个独立的文件（例如，不要加到render_messages_internal.h里）。这对过滤线程（除了IO线程）也有帮助。作为一个例子，查看content/common/pepper_file_messages.h。这允许他们的过滤器PepperFileMessageFilter方便的发送文件到file线程，而不用在很多位置指定它们的ID。
-```c
-void PepperFileMessageFilter::OverrideThreadForMessage(
+通常，如果一个特性有许多 `IPC` 消息，这些消息应该移动到一个独立的文件（例如，不要加到 `render_messages_internal.h` 里）。这对过滤消息的线程（除了 IO 线程）也有帮助。作为一个例子，请看 `content/common/database_messages.h` 。这允许他们的过滤器 `DatabaseMessageFilter` 方便的发送文件到 file 线程，而不用在很多位置指定它们的 ID。
+
+```C++
+void DatabaseMessageFilter::OverrideThreadForMessage(
     const IPC::Message& message,
     BrowserThread::ID* thread) {
-  if (IPC_MESSAGE_CLASS(message) == PepperFileMsgStart)
+  if (IPC_MESSAGE_CLASS(message) == DatabaseMsgStart)
     *thread = BrowserThread::FILE;
 }
 ```
