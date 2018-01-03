@@ -30,33 +30,33 @@ browser 与一个包含内容的特定标签页之间的通信是通过这些 `R
 
 ## 组件与接口
 
-在渲染进程中：
+在 render process 中：
 
-- *RenderProcess*处理与浏览器中对应的*RenderProcessHost*的通信。每个渲染进程就有唯一的一个RenderProcess对象。这就是所有浏览器-渲染器之间的交互发生的方式。
+- `RenderProcess` 处理与 browser 对应的 `RenderProcessHost` 的 `IPC` 通信。每个 render process 就有唯一的一个 `RenderProcess` 对象。这就是所有 browser、renderer 之间的通信发生的方式。
 
-- RenderView对象与它在浏览器进程中对应的RenderViewHost和我们的webkit嵌入层通信（通过RenderProcess）。这个对象代表了一个网页在标签页或一个弹出窗口的内容。
+- `RenderView` 对象与它在 browser process 中对应的 `RenderViewHost`（通过 `RenderProcess`）和我们的 webkit 嵌入层通信。这个对象代表了一个网页在标签页或一个弹出窗口的内容。
 
-在浏览器进程中:
+在 browser process 中:
 
-- Browser对象代表了顶级浏览器窗口
-- RenderProcessHost对象代表了浏览器端浏览器的与渲染器的IPC连接。在浏览器进程里，每个渲染进程有一个RenderProcessHost对象。
-- RenderViewHost对象封装了与远端浏览器的交流，RenderWidgetHost处理输入并在浏览器中为RenderWidget进行绘制。
+- `Browser` 对象代表了顶级浏览器窗口
+- `RenderProcessHost` 对象代表了浏览器中单个 browser 与 renderer  之间的 `IPC` 连接。在浏览器进程里，对于每个 render process 来说，在 browser process 中仅有一个 `RenderProcessHost` 对象与之对应。
+- `RenderViewHost` 对象封装了与远端 `RenderView` 的交流，`RenderWidgetHost` 处理输入并在 browser 中为 `RenderWidget` 进行绘制。
 
-想要得到更多关于这种嵌入是如何工作的详细信息，可以查看[How Chromium displays web pages design document](How_Chromium_displays_web_pages_design_document)。
-
-
-## 共享绘制器进程
-
-通常，每个新的window或标签页是在一个新进程里打开的。浏览器会生成一个新的进程，然后指导它去创建一个*RenderView*。
-
-有时候，有这样一种必要或欲望在标签页或窗口间共享渲染进程。一个web应用程序会在期望同步交流时，打开一个新的窗口，比如，在javascript里使用window.open。这种情况下，当我们创建一个新的window或标签页时，我们需要重用打开这个window的进程。我们也有一些策略来把新的标签页分配的已有的进程（如果总的进程数太大的话，或者如果用户已经为这个域名打开了一个进程）。这些策略在[Process Models](../General_Architecture/Process_Models.md)里也有阐述。
+想要得到更多关于这种嵌入是如何工作的详细信息，可以查看 [How Chromium displays web pages design document](How_Chromium_displays_web_pages_design_document)。
 
 
-## 检测crash或者失误的渲染
+## 共享 render process
 
-每个到浏览器进程的IPC连接会观察进程句柄。如果这些句柄是signaled（有信号的），那么渲染进程已经挂了，标签页会得到一个通知。从这时开始，我们会展示一个“sad tab”画面来通知用户渲染器已经挂掉了。这个页面可以按刷新按钮或者通过打开一个新的导航来重新加载。这时，我们会注意到没有对应的进程，然后创建一个新的。
+通常，每个新的 window 或标签页是在一个新进程里打开的。browser 会生成一个新的进程，然后指导它去创建一个 `RenderView`。
 
-## 渲染器中的沙箱
+有时候，有这样一种必要或欲望在标签页或窗口间共享 render process 。一个 web 应用程序会在期望同步交流时，打开一个新的 window，比如，在 JavaScript 里使用 `window.open`。这种情况下，当我们创建一个新的 window 或标签页时，我们需要重用打开这个 window 的进程。我们也有一些策略来把新的标签页分配给已有的进程（如果进程总数太大，或者用户已经有一个打开到该域的进程）。这些策略在 [Process Models](../General_Architecture/Process_Models.md) 里也有阐述。
+
+
+## 检测 crashed 或者异常的 renderers
+
+browser process 的 的每个 `IPC` 连接会监听进程句柄。如果这些句柄是 signaled（有信号的），那么 render process 已经挂了，标签页会得到一个通知。从这时开始，我们会展示一个 "sad tab" 画面来通知用户 renderer 已经挂掉了。这个页面可以按刷新按钮或者通过打开一个新的导航来重新加载。这时，我们会注意到没有对应的进程，然后创建一个新的。
+
+## renderer 中的沙箱
 
 给定的WebKit是运行在独立的进程中的，所以我们有机会限制它对系统资源的访问。例如，我们可以确保渲染器唯一的网络权限是通过它的父浏览器进程实现。相似的，我们可以限制它对文件系统的访问权限来使用host操作系统内置的权限。
 
