@@ -20,13 +20,15 @@
 
 ### 管理渲染进程
 
-每个 render process 有一个全局的 `RenderProcess` 对象，用来管理与 parent browser process 之间的通信和维护全局的状态。browser 为每个 render process 维护一个对应的 `RenderProcessHost`，用来管理 browser 状态，并与 renderer 通信。The browser and the renderers 使用[Chromium's IPC system](../General_Architecture/Inter-process_Communication.md)进行通信。
+每个 render process 有一个全局的 `RenderProcess` 对象，用来管理与父 browser process 之间的通信和维护全局的状态。browser 为每个 render process 维护一个对应的 `RenderProcessHost`，用来管理 browser 状态，并与 renderer 通信。browser and renderer 使用 [Chromium's IPC system](../General_Architecture/Inter-process_Communication.md) 进行通信。
 
 ### 管理 view
 
 每个 render process 有一个以上的 `RenderView` 对象，由 `RenderProcess` 管理（它与标签页的内容相关）。对应的 `RenderProcessHost` 维护一个与 renderer 中每个 view 相关的 `RenderViewHost`。每个 view 被赋予一个 view ID,以区分同一个 renderer 中的不同 view。这些 ID 在每个 renderer 内是唯一的，但在 browser 中不是，所以区分一个 view 需要一个 `RenderProcessHost` 和一个 view ID。
 
-browser 与一个包含内容的特定标签页之间的通信是通过这些 `RenderViewHost` 对象来完成的，`RenderViewHost` 知道如何通过它们的`RenderProcessHost` 向 `RenderProcess` 和 `RenderView` 发送消息。
+browser 与一个包含内容的特定标签页之间的通信是通过这些 `RenderViewHost` 对象来完成的，`RenderViewHost` 知道如何通过它们的 `RenderProcessHost` 向 `RenderProcess` 和 `RenderView` 发送消息。
+
+译者注：
 
 ## 组件与接口
 
@@ -38,12 +40,11 @@ browser 与一个包含内容的特定标签页之间的通信是通过这些 `R
 
 在 browser process 中:
 
-- `Browser` 对象代表了顶级浏览器窗口
-- `RenderProcessHost` 对象代表了浏览器中单个 browser 与 renderer  之间的 `IPC` 连接。在浏览器进程里，对于每个 render process 来说，在 browser process 中仅有一个 `RenderProcessHost` 对象与之对应。
-- `RenderViewHost` 对象封装了与远端 `RenderView` 的交流，`RenderWidgetHost` 处理输入并在 browser 中为 `RenderWidget` 进行绘制。
+- `Browser` 对象代表了 a top-level browser window
+- `RenderProcessHost` 对象代表了浏览器中单个 browser 与 renderer  之间的 `IPC` 连接（the browser side of a single browser ↔ renderer IPC connection）。在 browser process 中，对于每个 render process 来说，在 browser process 中仅有一个 `RenderProcessHost` 与之对应。
+- `RenderViewHost` 对象封装了与远端 `RenderView` 的通信，`RenderWidgetHost` 处理输入并在 browser 中为 `RenderWidget` 进行绘制。
 
 想要得到更多关于这种嵌入是如何工作的详细信息，可以查看 [How Chromium displays web pages design document](How_Chromium_displays_web_pages_design_document)。
-
 
 ## 共享 render process
 
@@ -70,7 +71,7 @@ browser process 的每个 `IPC` 连接会监听进程句柄。如果这些句柄
 
 ## 插件和扩展
 
-Firefox 风格的 NPAPI 插件运行在他们自己的进程里，与 renderers 隔离。这会在[Plugin Architecture](../General_Architecture/Plugin_Architecture.md)中描述。
+Firefox 风格的 NPAPI 插件运行在他们自己的进程里，与 renderer 隔离。这会在 [Plugin Architecture](../General_Architecture/Plugin_Architecture.md) 中描述。
 
 [Site Isolation](https://www.chromium.org/developers/design-documents/site-isolation) 项目的旨在提供更多的 renderers 之间的隔离，该项目的早期交付包括在隔离的进程中运行 Chrome 的 HTML / JavaScript 内容扩展。
 
